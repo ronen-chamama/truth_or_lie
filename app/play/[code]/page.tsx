@@ -316,11 +316,11 @@ export default function PlayPage() {
             </div>
           )}
 
-          {room.status === "revealed" && round?.reveal_truth !== null && (
-            <div className="mt-4 card-title text-center">
-              זה היה: {round.reveal_truth ? "אמת ✅" : "שקר ❌"}
-            </div>
-          )}
+          {room.status === "revealed" && round && round.reveal_truth !== null && (
+  <div className="mt-4 card-title text-center">
+    זה היה: {round.reveal_truth ? "אמת ✅" : "שקר ❌"}
+  </div>
+)}
 
           {iAmSpeaker && room.status === "voting_closed" ? (
             <button onClick={reveal} className="mt-4 capsule capsule-dark">
