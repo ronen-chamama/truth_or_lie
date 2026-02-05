@@ -322,6 +322,7 @@ export default function PlayPage() {
   </div>
 )}
 
+
           {iAmSpeaker && room.status === "voting_closed" ? (
             <button onClick={reveal} className="mt-4 capsule capsule-dark">
               חשוף אמת/שקר
