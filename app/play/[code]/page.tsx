@@ -164,21 +164,57 @@ export default function PlayPage() {
 
   // Realtime
   useEffect(() => {
-    if (!room?.id) return;
+  if (!room?.id) return;
 
-    const ch = supabase
-      .channel(`room:${room.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` }, fetchAll)
-      .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `room_id=eq.${room.id}` }, fetchAll)
-      .on("postgres_changes", { event: "*", schema: "public", table: "rounds", filter: `room_id=eq.${room.id}` }, fetchAll)
-      .on("postgres_changes", { event: "*", schema: "public", table: "votes" }, fetchAll)
-      .subscribe();
+  const ch = supabase
+    .channel(`room:${room.id}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
+      () => fetchAll()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "players", filter: `room_id=eq.${room.id}` },
+      () => fetchAll()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "rounds", filter: `room_id=eq.${room.id}` },
+      () => fetchAll()
+    )
+    .subscribe((status) => {
+      // חשוב: לראות בקונסול אם זה באמת SUBSCRIBED ב-Prod
+      console.log("[realtime]", status, "room", room.id);
+    });
 
-    return () => {
-      supabase.removeChannel(ch);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.id]);
+  return () => {
+    supabase.removeChannel(ch);
+  };
+// שים לב: תלות רק ב-room.id כדי לא “למחוק” channel בגלל שינויי state אחרים
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [room?.id]);
+
+// Subscription נוסף ל-votes שמסונן לפי round (ונוצר מחדש כשה-round משתנה)
+useEffect(() => {
+  if (!room?.current_round_id) return;
+
+  const chVotes = supabase
+    .channel(`votes:${room.current_round_id}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${room.current_round_id}` },
+      () => fetchAll()
+    )
+    .subscribe((status) => {
+      console.log("[realtime votes]", status, "round", room.current_round_id);
+    });
+
+  return () => {
+    supabase.removeChannel(chVotes);
+  };
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [room?.current_round_id]);
 
   async function startGame() {
     if (!room) return;
