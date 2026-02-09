@@ -466,18 +466,17 @@ export default function PlayPage() {
           {!round?.revealed ? (
             <>
               {!iAmSpeaker ? (
-                <>
-                  <div className="mt-3 card-sub text-center">
-                    המשפט לא נחשף למצביעים. שואלים שאלות בעולם האמיתי ואז מצביעים.
-                  </div>
-                  {myVote ? (
-                    <div className="card-sub text-center mt-2">
-                      הצבעת: <b>{myVote === "truth" ? "אמת" : "שקר"}</b>
-                    </div>
-                  ) : null}
-                </>
+                <div className="mt-6 space-y-3" key={stampKey}>
+                  <button className={`capsule w-full ${myVote === "truth" ? "capsule-dark" : ""}`} disabled={!!myVote} onClick={() => cast("truth")}>
+                    אמת
+                  </button>
+                  <button className={`capsule w-full ${myVote === "lie" ? "capsule-dark" : ""}`} disabled={!!myVote} onClick={() => cast("lie")}>
+                    שקר
+                  </button>
+                  {myVote ? <div className="card-sub text-center mt-2">הצבעת: <b>{myVote === "truth" ? "אמת" : "שקר"}</b></div> : null}
+                </div>
               ) : (
-                <div className="mt-3 card-sub text-center">תקרא את המשפט בקול ותנסה לעבוד עליהם 😈</div>
+                <div className="mt-6 card-sub text-center">כולם מצביעים עכשיו…</div>
               )}
 
               <div className="mt-6 flex items-center justify-between">
@@ -517,20 +516,6 @@ export default function PlayPage() {
           {status ? <div className="mt-3 card-sub text-center">{status}</div> : null}
         </div>
       </div>
-
-      {/* action bar (הכפתורים מהאסטס של אמת/שקר כמו קודם) */}
-      {!iAmSpeaker && !round?.revealed ? (
-        <div className="action-bar">
-          <div className="action-row">
-            <button className="choice-btn" onClick={() => cast("lie")} aria-label="שקר" disabled={!!myVote}>
-              <img key={`lie-${stampKey}`} className={`choice-img ${stampKey ? "stamp" : ""}`} src="/lie_button.png" alt="שקר" />
-            </button>
-            <button className="choice-btn" onClick={() => cast("truth")} aria-label="אמת" disabled={!!myVote}>
-              <img key={`truth-${stampKey}`} className={`choice-img ${stampKey ? "stamp" : ""}`} src="/truth_button.png" alt="אמת" />
-            </button>
-          </div>
-        </div>
-      ) : null}
     </AppShell>
   );
 }
