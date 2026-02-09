@@ -87,23 +87,15 @@ export default function HomePage() {
           <div className="card-sub text-center">פתח משחק חדש או הצטרף עם קוד</div>
 
           {/* יצירת חדר */}
-          <div className="mt-5 pill w-full flex-col gap-2">
-            <div className="font-extrabold text-center">פתח משחק חדש</div>
-
-            <input
-              className="w-full pill text-center"
-              placeholder="שם החדר (לא חובה)"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-            />
-
+          <div className="mt-5 w-full flex-col gap-2">
+    
             <button className="capsule capsule-dark w-full" onClick={createRoom}>
               פתח חדר חדש
             </button>
           </div>
 
           {/* הצטרפות */}
-          <div className="mt-4 pill w-full flex-col gap-2">
+          <div className="mt-4 w-full flex-col gap-2">
             <div className="font-extrabold text-center">הצטרף למשחק קיים</div>
 
             <input
@@ -114,7 +106,7 @@ export default function HomePage() {
               onChange={(e) => setJoinCode(cleanCode(e.target.value))}
             />
 
-            <button className="capsule capsule-dark w-full" disabled={!canJoin} onClick={goJoin}>
+            <button className="capsule capsule-dark w-full mt-3" disabled={!canJoin} onClick={goJoin}>
               הצטרפות עם קוד
             </button>
           </div>

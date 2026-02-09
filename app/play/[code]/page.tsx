@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { ensureAnonAuth, supabase } from "@/lib/supabase";
 import AppShell from "@/components/AppShell";
 import LogoLoader from "@/components/LogoLoader";
@@ -9,7 +9,6 @@ import LogoLoader from "@/components/LogoLoader";
 type Room = {
   id: string;
   code: string;
-  name: string;
   status: string;
   host_user_id: string | null;
   current_round_id: string | null;
@@ -44,6 +43,8 @@ export default function PlayPage() {
   const params = useParams<{ code: string }>();
   const code = (params.code || "").toString();
 
+  const router = useRouter();
+
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [round, setRound] = useState<Round | null>(null);
@@ -53,11 +54,6 @@ export default function PlayPage() {
   const [status, setStatus] = useState<string>("");
   const [overlay, setOverlay] = useState<string | null>(null);
   const [stampKey, setStampKey] = useState<number>(0);
-
-  // Fallback polling (critical for Prod stability when Realtime is flaky / blocked / RLS'd)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const roomSubRef = useRef<boolean>(false);
-  const votesSubRef = useRef<boolean>(false);
 
   const isHost = useMemo(() => !!room?.host_user_id && room.host_user_id === meUserId, [room, meUserId]);
 
@@ -88,12 +84,20 @@ export default function PlayPage() {
   }, [players.length, round]);
 
   async function fetchAll() {
-    if (!code || code.length !== 4) return;
+    // אם אין קוד תקין עדיין (למשל ברינדור ראשון) – לא להיתקע על "טוען..."
+    if (!code || code.length !== 4) {
+      setRoom(null);
+      setRound(null);
+      setVotes([]);
+      setPlayers([]);
+      setStatus(code ? "קוד חדר לא תקין" : "טוען…");
+      return;
+    }
 
     // חדר לפי קוד
     const { data: roomRow, error: roomErr } = await supabase
       .from("rooms")
-      .select("id,code,name,status,host_user_id,current_round_id")
+      .select("id,code,status,host_user_id,current_round_id")
       .eq("code", code)
       .maybeSingle();
 
@@ -157,40 +161,9 @@ export default function PlayPage() {
     setStatus("");
   }
 
-  function startPolling() {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(() => {
-      void fetchAll();
-    }, 2500);
-    console.log("[polling] started");
-  }
-
-  function updatePolling() {
-    // Poll unless BOTH subscriptions (room + votes) are subscribed.
-    if (roomSubRef.current && (room?.current_round_id ? votesSubRef.current : true)) stopPolling();
-    else startPolling();
-  }
-
-  function stopPolling() {
-    if (!pollRef.current) return;
-    clearInterval(pollRef.current);
-    pollRef.current = null;
-    console.log("[polling] stopped");
-  }
-
-  async function ensureRealtimeAuth() {
-    // In Prod (and especially Incognito), we must ensure the Realtime client has a valid JWT
-    // otherwise subscriptions may fail under RLS and look like a TIMEOUT.
-    await ensureAnonAuth();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (token) supabase.realtime.setAuth(token);
-    return sessionData.session;
-  }
-
   useEffect(() => {
     (async () => {
-      await ensureRealtimeAuth();
+      await ensureAnonAuth();
       const { data } = await supabase.auth.getUser();
       setMeUserId(data.user?.id ?? null);
       await fetchAll();
@@ -198,105 +171,58 @@ export default function PlayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
-  // On unmount, ensure polling is cleaned up
+  // Realtime
   useEffect(() => {
-    return () => {
-      stopPolling();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  if (!room?.id) return;
 
-  // Realtime (room + players + rounds) with polling fallback
-  useEffect(() => {
-    if (!room?.id) return;
+  const ch = supabase
+    .channel(`room:${room.id}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
+      () => fetchAll()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "players", filter: `room_id=eq.${room.id}` },
+      () => fetchAll()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "rounds", filter: `room_id=eq.${room.id}` },
+      () => fetchAll()
+    )
+    .subscribe((status) => {
+      // חשוב: לראות בקונסול אם זה באמת SUBSCRIBED ב-Prod
+      console.log("[realtime]", status, "room", room.id);
+    });
 
-    // reset subscription flags for this room
-    roomSubRef.current = false;
-    updatePolling();
-
-    let ch: any;
-    let cancelled = false;
-
-    (async () => {
-      await ensureRealtimeAuth();
-      if (cancelled) return;
-
-      ch = supabase
-        .channel(`room:${room.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
-          () => fetchAll()
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "players", filter: `room_id=eq.${room.id}` },
-          () => fetchAll()
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "rounds", filter: `room_id=eq.${room.id}` },
-          () => fetchAll()
-        )
-        .subscribe((s) => {
-          console.log("[realtime room]", s, "room", room.id);
-          roomSubRef.current = s === "SUBSCRIBED";
-          updatePolling();
-        });
-
-      // safety net: if it doesn't subscribe quickly, poll anyway
-      setTimeout(() => {
-        if (!cancelled) updatePolling();
-      }, 4000);
-    })();
-
-    return () => {
-      cancelled = true;
-      roomSubRef.current = false;
-      updatePolling();
-      if (ch) supabase.removeChannel(ch);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.id]);
+  return () => {
+    supabase.removeChannel(ch);
+  };
+// שים לב: תלות רק ב-room.id כדי לא “למחוק” channel בגלל שינויי state אחרים
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [room?.id]);
 
 // Subscription נוסף ל-votes שמסונן לפי round (ונוצר מחדש כשה-round משתנה)
 useEffect(() => {
   if (!room?.current_round_id) return;
 
-  // reset votes subscription flag for this round
-  votesSubRef.current = false;
-  updatePolling();
-
-  let cancelled = false;
-  let chVotes: any;
-
-  (async () => {
-    await ensureRealtimeAuth();
-    if (cancelled) return;
-
-    chVotes = supabase
-      .channel(`votes:${room.current_round_id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${room.current_round_id}` },
-        () => fetchAll()
-      )
-      .subscribe((s) => {
-        console.log("[realtime votes]", s, "round", room.current_round_id);
-        votesSubRef.current = s === "SUBSCRIBED";
-        updatePolling();
-      });
-
-    setTimeout(() => {
-      if (!cancelled) updatePolling();
-    }, 4000);
-  })();
+  const chVotes = supabase
+    .channel(`votes:${room.current_round_id}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${room.current_round_id}` },
+      () => fetchAll()
+    )
+    .subscribe((status) => {
+      console.log("[realtime votes]", status, "round", room.current_round_id);
+    });
 
   return () => {
-    cancelled = true;
-    if (chVotes) supabase.removeChannel(chVotes);
+    supabase.removeChannel(chVotes);
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [room?.current_round_id]);
 
   async function startGame() {
@@ -344,6 +270,14 @@ useEffect(() => {
     }
   }
 
+  function startNewGame() {
+    try {
+      localStorage.removeItem("truth_or_lie_player_id");
+    } catch {}
+    router.push("/");
+  }
+
+
   if (!room) {
     return (
       <AppShell>
@@ -358,6 +292,28 @@ useEffect(() => {
     );
   }
   
+
+
+  // FINISH SCREEN
+  if (room.status === "finished") {
+    return (
+      <AppShell>
+        {overlay ? <LogoLoader label={overlay} /> : null}
+        <div className="game-card">
+          <div className="card-inner">
+            <div className="card-title text-center">המשחק נגמר 🎉</div>
+            <div className="card-sub text-center">תודה ששיחקתם! אפשר להתחיל משחק חדש.</div>
+
+            <button onClick={startNewGame} className="mt-4 capsule capsule-dark w-full">
+              משחק חדש
+            </button>
+
+            {status ? <div className="mt-3 card-sub text-center">{status}</div> : null}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   // LOBBY
   if (room.status === "lobby" || !room.current_round_id) {

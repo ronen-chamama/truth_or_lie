@@ -15,9 +15,13 @@ html, body {
   height: 100%;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   color: var(--ink);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans Hebrew", sans-serif;
+  font-family: var(--font-main), system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans Hebrew", sans-serif;
 }
 
 /* Full-screen background wrapper */
@@ -70,12 +74,23 @@ body {
   background-image: url('/card_bg.png');
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  border-radius: 22px;
-  box-shadow: var(--card-shadow);
+  border-radius: 0;
+  /* Use drop-shadow so the container itself stays visually transparent */
+  box-shadow: none;
+  filter: drop-shadow(var(--card-shadow));
+  background-color: transparent; /* show only the frame asset */
+  overflow: hidden; /* keep content within the illustrated frame */
 }
 
 .card-inner {
-  padding: 22px 22px;
+  /* More breathing room so content sits well inside the drawn frame */
+  padding: 66px 52px 58px;
+}
+
+@media (max-width: 380px) {
+  .card-inner {
+    padding: 40px 24px 32px;
+  }
 }
 
 .card-title {
