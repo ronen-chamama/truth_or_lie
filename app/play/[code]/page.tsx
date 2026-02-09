@@ -485,12 +485,12 @@ export default function PlayPage() {
                 <div className="pill text-sm font-bold">שקר: {voteCounts.lie}</div>
               </div>
 
-              {isHost ? (
+              {iAmSpeaker ? (
                 <button onClick={reveal} disabled={!allVoted} className={`mt-4 capsule ${allVoted ? "capsule-dark" : "opacity-60"}`}>
                   חשוף תוצאה
                 </button>
               ) : (
-                <div className="mt-4 card-sub text-center">ממתינים שהמנהל יחשוף…</div>
+                <div className="mt-4 card-sub text-center">ממתינים שהקורא יחשוף…</div>
               )}
             </>
           ) : (
